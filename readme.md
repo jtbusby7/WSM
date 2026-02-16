@@ -16,7 +16,7 @@ A professional Word VBA solution designed for engineering and architectural spec
 1.  Open your Microsoft Word document or Global Template (`Normal.dotm`).
 2.  Press `Alt + F11` to open the Visual Basic for Applications (VBA) editor.
 3.  Right-click on **Modules** in the Project Explorer and select **Insert > Module**.
-4.  Copy the code from `PrintSpectPDF07_64Bit.bas` in this repository and paste it into the new module.
+4.  Copy the code from `PrintSpectPDF07.bas` in this repository and paste it into the new module.
 5.  Ensure the file `projname.doc` exists in the same directory as your specification file.
 
 ## 📖 How To Use
