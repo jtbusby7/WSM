@@ -28,7 +28,7 @@ A professional Word VBA solution designed for engineering and architectural spec
 
 ## 📋 Technical Requirements
 
-* **Environment:** Microsoft Word (32-bit or 64-bit).
+* **Environment:** Microsoft Word (64-bit).
 * **OS:** Windows 10 or 11.
 * **Permissions:** Ability to run VBA macros and access to the local folder path for header insertion.
 
