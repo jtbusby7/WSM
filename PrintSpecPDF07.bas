@@ -87,6 +87,7 @@ Sub MAIN()
     Dim sCurrentPrinter As String
     Dim ProjHeaderFile As String
     Dim iColor As Long
+    Dim para As Paragraph
     Dim tbl As Table
     
     On Error GoTo ErrorHandler
@@ -95,8 +96,17 @@ Sub MAIN()
     ActiveDocument.BuiltInDocumentProperties(wdPropertyTitle) = ActiveDocument.BuiltInDocumentProperties(wdPropertyTitle)
     ProjHeaderFile = ActiveDocument.Path & Application.PathSeparator & "projname.doc"
 
-    ' 2. "SEARCH AND DESTROY" - Fix for Office 365 (Build 2601)
-    ' Physically remove hidden text so modern Word engines cannot render it
+    ' 2. GLOBAL BOX STRIPPER (The Fix for the image provided)
+    ' This sweeps the whole document to kill borders on hidden/empty MasterSpec containers
+    For Each para In ActiveDocument.Paragraphs
+        ' If the paragraph contains hidden text or is a MasterSpec instructional box
+        If para.Range.Font.Hidden = True Or para.Range.Text = vbCr Then
+            para.Borders.Enable = False
+            para.Range.Font.Hidden = True ' Keep it hidden for the count
+        End If
+    Next para
+
+    ' 3. SEARCH AND DESTROY - Physically remove the text
     With ActiveDocument.Content.Find
         .ClearFormatting
         .Font.Hidden = True
@@ -105,7 +115,7 @@ Sub MAIN()
         .Execute Replace:=wdReplaceAll
     End With
 
-    ' 3. Clean Header and Strip Hidden Fields
+    ' 4. HEADER PROCESSING
     With ActiveWindow.View
         .Type = wdPrintView
         .ShowHiddenText = False 
@@ -114,32 +124,22 @@ Sub MAIN()
 
     Selection.WholeStory
     Selection.Delete Unit:=wdCharacter, Count:=1
-
-    ' Apply style to empty header
+    
     On Error Resume Next
     Selection.Style = ActiveDocument.Styles("JH")
     On Error GoTo ErrorHandler
 
-    ' Insert header file
     Selection.InsertFile FileName:=ProjHeaderFile
 
-    ' 4. "BOX KILLER" - Fix for AIA MasterSpec Tables
-    ' Strips borders from MasterSpec instructional containers in the header
-    Selection.WholeStory
+    ' Clean Header Tables/Borders
     For Each tbl In Selection.Tables
         tbl.Borders.Enable = False
-        tbl.Rows.LeftIndent = 0
     Next tbl
-    
-    ' Force paragraph indents and borders to zero
-    With Selection.ParagraphFormat
-        .Borders.Enable = False
-        .LeftIndent = 0
-    End With
+    Selection.ParagraphFormat.Borders.Enable = False
 
     ActiveWindow.View.SeekView = wdSeekMainDocument
 
-    ' 5. Handle Even Page Logic
+    ' 5. EVEN PAGE LOGIC
     Options.PrintHiddenText = False
     ActiveDocument.Repaginate
     
@@ -148,24 +148,17 @@ Sub MAIN()
         Selection.InsertBreak Type:=wdPageBreak
     End If
 
-    ' 6. Printer Selection and Execution
+    ' 6. PRINTER DIALOG
     sCurrentPrinter = Application.ActivePrinter
-
     With Application.Dialogs(wdDialogFilePrint)
         If .Display = -1 Then
             iColor = GetColorMode()
-            SetColorMode 1 ' Force Color
-            
+            SetColorMode 1 
             .Execute
-            
-            ' Restore Color Mode
             SetColorMode iColor
-        Else
-            MsgBox "Printing cancelled.", vbInformation
         End If
     End With
 
-    ' Restore original printer
     Application.ActivePrinter = sCurrentPrinter
     Exit Sub
 
@@ -249,3 +242,4 @@ Private Function GetPrinterProperty(ByVal iPropertyType As Long) As Long
 cleanup:
     If (hPrinter <> 0) Then Call ClosePrinter(hPrinter)
 End Function
+
