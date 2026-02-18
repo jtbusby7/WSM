@@ -100,7 +100,7 @@ Sub MAIN()
     ' This sweeps the whole document to kill borders on hidden/empty MasterSpec containers
     For Each para In ActiveDocument.Paragraphs
         ' If the paragraph contains hidden text or is a MasterSpec instructional box
-        If para.Range.Font.Hidden = True Or para.Range.Text = vbCr Then
+        If para.Range.Font.Hidden = True Or para.Range.Font.Hidden = wdUndefined Or para.Range.Text = vbCr Then
             para.Borders.Enable = False
             para.Range.Font.Hidden = True ' Keep it hidden for the count
         End If
@@ -242,4 +242,5 @@ Private Function GetPrinterProperty(ByVal iPropertyType As Long) As Long
 cleanup:
     If (hPrinter <> 0) Then Call ClosePrinter(hPrinter)
 End Function
+
 
