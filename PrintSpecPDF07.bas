@@ -87,6 +87,7 @@ Sub MAIN()
     Dim sCurrentPrinter As String
     Dim ProjHeaderFile As String
     Dim iColor As Long
+    Dim tbl As Table
     
     On Error GoTo ErrorHandler
     
@@ -94,10 +95,20 @@ Sub MAIN()
     ActiveDocument.BuiltInDocumentProperties(wdPropertyTitle) = ActiveDocument.BuiltInDocumentProperties(wdPropertyTitle)
     ProjHeaderFile = ActiveDocument.Path & Application.PathSeparator & "projname.doc"
 
-    ' 2. Clean Header and Strip Hidden Fields
+    ' 2. "SEARCH AND DESTROY" - Fix for Office 365 (Build 2601)
+    ' Physically remove hidden text so modern Word engines cannot render it
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Font.Hidden = True
+        .Text = ""
+        .Replacement.Text = ""
+        .Execute Replace:=wdReplaceAll
+    End With
+
+    ' 3. Clean Header and Strip Hidden Fields
     With ActiveWindow.View
         .Type = wdPrintView
-        .ShowHiddenText = False ' Reverting: This hides the blue fields
+        .ShowHiddenText = False 
         .SeekView = wdSeekCurrentPageHeader
     End With
 
@@ -111,9 +122,24 @@ Sub MAIN()
 
     ' Insert header file
     Selection.InsertFile FileName:=ProjHeaderFile
+
+    ' 4. "BOX KILLER" - Fix for AIA MasterSpec Tables
+    ' Strips borders from MasterSpec instructional containers in the header
+    Selection.WholeStory
+    For Each tbl In Selection.Tables
+        tbl.Borders.Enable = False
+        tbl.Rows.LeftIndent = 0
+    Next tbl
+    
+    ' Force paragraph indents and borders to zero
+    With Selection.ParagraphFormat
+        .Borders.Enable = False
+        .LeftIndent = 0
+    End With
+
     ActiveWindow.View.SeekView = wdSeekMainDocument
 
-    ' 3. Handle Even Page Logic (Hiding text ensures accurate count)
+    ' 5. Handle Even Page Logic
     Options.PrintHiddenText = False
     ActiveDocument.Repaginate
     
@@ -122,12 +148,11 @@ Sub MAIN()
         Selection.InsertBreak Type:=wdPageBreak
     End If
 
-    ' 4. Printer Selection and Execution
+    ' 6. Printer Selection and Execution
     sCurrentPrinter = Application.ActivePrinter
 
     With Application.Dialogs(wdDialogFilePrint)
         If .Display = -1 Then
-            ' Capture and Set Printer Properties
             iColor = GetColorMode()
             SetColorMode 1 ' Force Color
             
@@ -161,17 +186,9 @@ Public Function GetColorMode() As Long
 End Function
 
 Private Function SetPrinterProperty(ByVal iPropertyType As Long, ByVal iPropertyValue As Long) As Boolean
-    Dim hPrinter As LongPtr
-    Dim pd As PRINTER_DEFAULTS
-    Dim pinfo As PRINTER_INFO_2
-    Dim dm As DEVMODE
-    Dim sPrinterName As String
-    Dim yDevModeData() As Byte
-    Dim yPInfoMemory() As Byte
-    Dim iBytesNeeded As Long
-    Dim iRet As Long
-    Dim iJunk As Long
-    Dim iCount As Long
+    Dim hPrinter As LongPtr, pd As PRINTER_DEFAULTS, pinfo As PRINTER_INFO_2, dm As DEVMODE
+    Dim sPrinterName As String, yDevModeData() As Byte, yPInfoMemory() As Byte
+    Dim iBytesNeeded As Long, iRet As Long, iJunk As Long, iCount As Long
       
     On Error GoTo cleanup
     sPrinterName = Trim$(Left$(ActivePrinter, InStr(ActivePrinter, " on ")))
@@ -208,14 +225,9 @@ cleanup:
     For iCount = 1 To 20: DoEvents: Next iCount
 End Function
 
-' The missing function that caused the compile error:
 Private Function GetPrinterProperty(ByVal iPropertyType As Long) As Long
-    Dim hPrinter As LongPtr
-    Dim pd As PRINTER_DEFAULTS
-    Dim dm As DEVMODE
-    Dim sPrinterName As String
-    Dim yDevModeData() As Byte
-    Dim iRet As Long
+    Dim hPrinter As LongPtr, pd As PRINTER_DEFAULTS, dm As DEVMODE, sPrinterName As String
+    Dim yDevModeData() As Byte, iRet As Long
       
     On Error GoTo cleanup
     sPrinterName = Trim$(Left$(ActivePrinter, InStr(ActivePrinter, " on ")))
