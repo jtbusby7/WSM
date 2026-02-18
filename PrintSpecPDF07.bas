@@ -96,29 +96,21 @@ Sub MAIN()
     ActiveDocument.BuiltInDocumentProperties(wdPropertyTitle) = ActiveDocument.BuiltInDocumentProperties(wdPropertyTitle)
     ProjHeaderFile = ActiveDocument.Path & Application.PathSeparator & "projname.doc"
 
-    ' 2. GLOBAL BOX STRIPPER (The Fix for the image provided)
-    ' This sweeps the whole document to kill borders on hidden/empty MasterSpec containers
+    ' 2. REFINED BOX STRIPPER
+    ' This only kills the BORDERS, it does NOT delete text.
+    ' It targets paragraphs that are hidden or empty.
     For Each para In ActiveDocument.Paragraphs
-        ' If the paragraph contains hidden text or is a MasterSpec instructional box
-        If para.Range.Font.Hidden = True Or para.Range.Font.Hidden = wdUndefined Or para.Range.Text = vbCr Then
+        ' If it's hidden or undefined (partially hidden), just kill the border
+        If para.Range.Font.Hidden <> False Or para.Range.Text = vbCr Then
             para.Borders.Enable = False
-            para.Range.Font.Hidden = True ' Keep it hidden for the count
         End If
     Next para
 
-    ' 3. SEARCH AND DESTROY - Physically remove the text
-    With ActiveDocument.Content.Find
-        .ClearFormatting
-        .Font.Hidden = True
-        .Text = ""
-        .Replacement.Text = ""
-        .Execute Replace:=wdReplaceAll
-    End With
-
-    ' 4. HEADER PROCESSING
+    ' 3. HEADER PROCESSING
+    ' We keep this because it targets the specific projname.doc insertion
     With ActiveWindow.View
         .Type = wdPrintView
-        .ShowHiddenText = False 
+        .ShowHiddenText = False
         .SeekView = wdSeekCurrentPageHeader
     End With
 
@@ -131,7 +123,7 @@ Sub MAIN()
 
     Selection.InsertFile FileName:=ProjHeaderFile
 
-    ' Clean Header Tables/Borders
+    ' Clean Header Tables
     For Each tbl In Selection.Tables
         tbl.Borders.Enable = False
     Next tbl
@@ -139,7 +131,8 @@ Sub MAIN()
 
     ActiveWindow.View.SeekView = wdSeekMainDocument
 
-    ' 5. EVEN PAGE LOGIC
+    ' 4. PRINTER LOGIC
+    ' We rely on Word's built-in "PrintHiddenText = False" instead of deleting text
     Options.PrintHiddenText = False
     ActiveDocument.Repaginate
     
@@ -148,12 +141,12 @@ Sub MAIN()
         Selection.InsertBreak Type:=wdPageBreak
     End If
 
-    ' 6. PRINTER DIALOG
+    ' 5. PRINTER DIALOG
     sCurrentPrinter = Application.ActivePrinter
     With Application.Dialogs(wdDialogFilePrint)
         If .Display = -1 Then
             iColor = GetColorMode()
-            SetColorMode 1 
+            SetColorMode 1
             .Execute
             SetColorMode iColor
         End If
@@ -242,5 +235,3 @@ Private Function GetPrinterProperty(ByVal iPropertyType As Long) As Long
 cleanup:
     If (hPrinter <> 0) Then Call ClosePrinter(hPrinter)
 End Function
-
-
