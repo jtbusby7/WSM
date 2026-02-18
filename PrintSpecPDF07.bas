@@ -96,18 +96,17 @@ Sub MAIN()
     ActiveDocument.BuiltInDocumentProperties(wdPropertyTitle) = ActiveDocument.BuiltInDocumentProperties(wdPropertyTitle)
     ProjHeaderFile = ActiveDocument.Path & Application.PathSeparator & "projname.doc"
 
-    ' 2. REFINED BOX STRIPPER
-    ' This only kills the BORDERS, it does NOT delete text.
-    ' It targets paragraphs that are hidden or empty.
+    ' 2. THE FIX: Structural Border Stripper ONLY
+    ' We removed the "Search and Destroy" loop that was deleting the numbering.
+    ' This loop simply turns off the borders (green boxes) for hidden/empty paragraphs.
     For Each para In ActiveDocument.Paragraphs
-        ' If it's hidden or undefined (partially hidden), just kill the border
+        ' If paragraph is marked hidden (or mixed/undefined), remove the border
         If para.Range.Font.Hidden <> False Or para.Range.Text = vbCr Then
             para.Borders.Enable = False
         End If
     Next para
 
     ' 3. HEADER PROCESSING
-    ' We keep this because it targets the specific projname.doc insertion
     With ActiveWindow.View
         .Type = wdPrintView
         .ShowHiddenText = False
@@ -123,7 +122,7 @@ Sub MAIN()
 
     Selection.InsertFile FileName:=ProjHeaderFile
 
-    ' Clean Header Tables
+    ' Clean Header Tables and Paragraph Borders
     For Each tbl In Selection.Tables
         tbl.Borders.Enable = False
     Next tbl
@@ -131,8 +130,8 @@ Sub MAIN()
 
     ActiveWindow.View.SeekView = wdSeekMainDocument
 
-    ' 4. PRINTER LOGIC
-    ' We rely on Word's built-in "PrintHiddenText = False" instead of deleting text
+    ' 4. PRINT PREP & EVEN PAGE LOGIC
+    ' Vital: Ensure Word knows NOT to print hidden text.
     Options.PrintHiddenText = False
     ActiveDocument.Repaginate
     
@@ -160,7 +159,7 @@ ErrorHandler:
 End Sub
 
 ' =========================================================
-' PRINTER UTILITY FUNCTIONS
+' PRINTER UTILITY FUNCTIONS (Standard 64-bit blocks)
 ' =========================================================
 
 Public Sub SetColorMode(iColorMode As Long)
