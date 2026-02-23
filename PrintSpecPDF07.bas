@@ -87,26 +87,53 @@ Sub MAIN()
     Dim sCurrentPrinter As String
     Dim ProjHeaderFile As String
     Dim iColor As Long
-    Dim para As Paragraph
+    Dim i As Long
+    Dim rngPara As Range
     Dim tbl As Table
+    
+    Dim bOrigBackground As Boolean
+    Dim objUndo As UndoRecord
     
     On Error GoTo ErrorHandler
     
-    ' 1. Refresh Document Properties
+    ' 1. START UNDO RECORD
+    ' This tracks all destructive changes so we can instantly revert them
+    ' after printing, completely saving your original AutoSave file.
+    Set objUndo = Application.UndoRecord
+    If objUndo.IsRecordingCustomRecord Then objUndo.EndCustomRecord
+    objUndo.StartCustomRecord "PrintPrep"
+    
+    ' 2. Refresh Document Properties
     ActiveDocument.BuiltInDocumentProperties(wdPropertyTitle) = ActiveDocument.BuiltInDocumentProperties(wdPropertyTitle)
     ProjHeaderFile = ActiveDocument.Path & Application.PathSeparator & "projname.doc"
 
-    ' 2. THE FIX: Structural Border Stripper ONLY
-    ' We removed the "Search and Destroy" loop that was deleting the numbering.
-    ' This loop simply turns off the borders (green boxes) for hidden/empty paragraphs.
-    For Each para In ActiveDocument.Paragraphs
-        ' If paragraph is marked hidden (or mixed/undefined), remove the border
-        If para.Range.Font.Hidden <> False Or para.Range.Text = vbCr Then
-            para.Borders.Enable = False
+    ' 3. THE FIX: Physically delete the MasterSpec boxes
+    ' We loop backwards so deleting paragraphs doesn't skip lines
+    For i = ActiveDocument.Paragraphs.Count To 1 Step -1
+        Set rngPara = ActiveDocument.Paragraphs(i).Range
+        
+        If rngPara.Characters.Count > 1 Then
+            rngPara.End = rngPara.End - 1 ' Exclude the paragraph mark to check the text
+            
+            If rngPara.Font.Hidden = True Then
+                ' The entire text is a hidden MasterSpec note. DELETE it completely.
+                ' This prevents Word from cloning list items and removes all indents.
+                ActiveDocument.Paragraphs(i).Range.Delete
+            Else
+                ' It's visible text or mixed text. Just strip the green border.
+                ActiveDocument.Paragraphs(i).Borders.Enable = False
+            End If
+        Else
+            ' It is an empty blank line
+            If rngPara.Font.Hidden = True Then
+                ActiveDocument.Paragraphs(i).Range.Delete
+            Else
+                ActiveDocument.Paragraphs(i).Borders.Enable = False
+            End If
         End If
-    Next para
+    Next i
 
-    ' 3. HEADER PROCESSING
+    ' 4. HEADER PROCESSING
     With ActiveWindow.View
         .Type = wdPrintView
         .ShowHiddenText = False
@@ -130,8 +157,7 @@ Sub MAIN()
 
     ActiveWindow.View.SeekView = wdSeekMainDocument
 
-    ' 4. PRINT PREP & EVEN PAGE LOGIC
-    ' Vital: Ensure Word knows NOT to print hidden text.
+    ' 5. PRINT PREP & EVEN PAGE LOGIC
     Options.PrintHiddenText = False
     ActiveDocument.Repaginate
     
@@ -139,23 +165,49 @@ Sub MAIN()
         Selection.EndKey Unit:=wdStory
         Selection.InsertBreak Type:=wdPageBreak
     End If
-
-    ' 5. PRINTER DIALOG
+    
+    ' Stop recording changes
+    objUndo.EndCustomRecord
+    
+    ' 6. PRINTER DIALOG
     sCurrentPrinter = Application.ActivePrinter
-    With Application.Dialogs(wdDialogFilePrint)
-        If .Display = -1 Then
-            iColor = GetColorMode()
-            SetColorMode 1
-            .Execute
-            SetColorMode iColor
-        End If
-    End With
-
+    
+    ' CRITICAL FIX: Turn off background printing.
+    ' This freezes VBA so it waits for the PDF to fully generate before reverting.
+    bOrigBackground = Options.PrintBackground
+    Options.PrintBackground = False
+    
+    ' Force Black and White
+    iColor = GetColorMode()
+    SetColorMode 1
+    
+    ' Show dialog and print exactly once
+    Application.Dialogs(wdDialogFilePrint).Show
+    
+    ' 7. RESTORE AND REVERT
+    SetColorMode iColor
     Application.ActivePrinter = sCurrentPrinter
+    Options.PrintBackground = bOrigBackground
+    
+    ' THIS IS THE MAGIC BULLET:
+    ' Instantly undoes everything (deleted paragraphs, headers, borders).
+    ' Your document goes right back to normal, and AutoSave is satisfied!
+    ActiveDocument.Undo 1
+    
+    ActiveDocument.Saved = True
     Exit Sub
 
 ErrorHandler:
     MsgBox "An error occurred: " & Err.Description, vbCritical
+    
+    ' Ensure the Undo record closes and reverts if the script crashes
+    If Not objUndo Is Nothing Then
+        If objUndo.IsRecordingCustomRecord Then objUndo.EndCustomRecord
+    End If
+    
+    On Error Resume Next
+    Options.PrintBackground = bOrigBackground
+    ActiveDocument.Undo 1
 End Sub
 
 ' =========================================================
